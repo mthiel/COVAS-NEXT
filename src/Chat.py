@@ -90,6 +90,86 @@ from lib.Database import ModelUsageStore, QuestDatabase, VectorStore
 from lib.Assistant import Assistant
 
 
+def create_stt(config: Config, plugin_manager: PluginManager) -> tuple[STTModel | None, STT]:
+    sttModel: STTModel | None = None
+    if config["stt_provider"] != "none":
+        stt_plugin = parse_plugin_provider(config["stt_provider"])
+        if stt_plugin:
+            model = plugin_manager.create_plugin_model(
+                stt_plugin[0], stt_plugin[1], "stt"
+            )
+            if model is None:
+                show_chat_message(
+                    "warning",
+                    f"Failed to create STT model from plugin provider. STT disabled.",
+                )
+            else:
+                sttModel = cast(STTModel, model)
+        else:
+            show_chat_message(
+                "warning",
+                f"STT provider is not a registered plugin: {config['stt_provider']}",
+            )
+
+    stt = STT(
+        stt_model=sttModel,
+        input_device_name=config["input_device_name"],
+        required_word=config["stt_required_word"],
+    )
+    return sttModel, stt
+
+
+def create_tts(
+    config: Config, plugin_manager: PluginManager, character: dict[str, Any]
+) -> tuple[TTSModel | None, TTS]:
+    ttsModel: TTSModel | None = None
+    tts_voice_settings: dict[str, Any] | None = None
+    if config["tts_provider"] != "none":
+        tts_plugin = parse_plugin_provider(config["tts_provider"])
+        if tts_plugin:
+            model = plugin_manager.create_plugin_model(
+                tts_plugin[0], tts_plugin[1], "tts"
+            )
+            if model is None:
+                show_chat_message(
+                    "warning",
+                    f"Failed to create TTS model from plugin provider. TTS disabled.",
+                )
+            else:
+                ttsModel = cast(TTSModel, model)
+                provider = plugin_manager.get_plugin_provider(
+                    tts_plugin[0], tts_plugin[1]
+                )
+                grids = provider.get("voice_settings_config", []) if provider else []
+                stored = character.get("tts_voice_settings", {}).get(
+                    config["tts_provider"], {}
+                )
+                tts_voice_settings = resolve_voice_settings(
+                    grids, config.get("plugin_settings", {}).get(tts_plugin[0], {}),
+                    stored if isinstance(stored, dict) else {},
+                )
+        else:
+            show_chat_message(
+                "warning",
+                f"TTS provider is not a registered plugin: {config['tts_provider']}",
+            )
+
+    if ttsModel is not None:
+        if hasattr(ttsModel, "speed"):
+            ttsModel.speed = float(character["tts_speed"])
+
+    tts = TTS(
+        tts_model=ttsModel,
+        voice=str((tts_voice_settings or {}).get("voice") or ""),
+        voice_settings=tts_voice_settings,
+        speed=float(character["tts_speed"]),
+        postprocessing_config=character.get("tts_postprocessing"),
+        output_device=config["output_device_name"],
+        output_volume_multiplier=float(config.get("output_volume_multiplier", 1.0)),
+    )
+    return ttsModel, tts
+
+
 def get_model_usage_history_payload(
     model_usage_store: ModelUsageStore,
     usage_kind: str | None = None,
@@ -247,69 +327,9 @@ class Chat:
                 show_chat_message("warning", f"Vision provider is not a registered plugin: {vision_provider}")
 
         log("debug", "Initializing Speech processing...")
-        self.sttModel: STTModel | None = None
-        if self.config["stt_provider"] != "none":
-            stt_plugin = parse_plugin_provider(self.config["stt_provider"])
-            if stt_plugin:
-                model = self.plugin_manager.create_plugin_model(
-                    stt_plugin[0], stt_plugin[1], "stt"
-                )
-                if model is None:
-                    show_chat_message(
-                        "warning",
-                        f"Failed to create STT model from plugin provider. STT disabled.",
-                    )
-                else:
-                    self.sttModel = cast(STTModel, model)
-            else:
-                show_chat_message("warning", f"STT provider is not a registered plugin: {self.config['stt_provider']}")
-
-        self.ttsModel: TTSModel | None = None
-        tts_voice_settings: dict[str, Any] | None = None
-        if self.config["tts_provider"] != "none":
-            tts_plugin = parse_plugin_provider(self.config["tts_provider"])
-            if tts_plugin:
-                model = self.plugin_manager.create_plugin_model(
-                    tts_plugin[0], tts_plugin[1], "tts"
-                )
-                if model is None:
-                    show_chat_message(
-                        "warning",
-                        f"Failed to create TTS model from plugin provider. TTS disabled.",
-                    )
-                else:
-                    self.ttsModel = cast(TTSModel, model)
-                    provider = self.plugin_manager.get_plugin_provider(tts_plugin[0], tts_plugin[1])
-                    grids = provider.get("voice_settings_config", []) if provider else []
-                    stored = self.character.get("tts_voice_settings", {}).get(
-                        self.config["tts_provider"], {}
-                    )
-                    tts_voice_settings = resolve_voice_settings(
-                        grids, self.config.get("plugin_settings", {}).get(tts_plugin[0], {}),
-                        stored if isinstance(stored, dict) else {},
-                    )
-            else:
-                show_chat_message("warning", f"TTS provider is not a registered plugin: {self.config['tts_provider']}")
-
-        if self.ttsModel is not None:
-            if hasattr(self.ttsModel, "speed"):
-                self.ttsModel.speed = float(self.character["tts_speed"])
-
-        self.tts = TTS(
-            tts_model=self.ttsModel,
-            voice=str((tts_voice_settings or {}).get("voice") or ""),
-            voice_settings=tts_voice_settings,
-            speed=float(self.character["tts_speed"]),
-            postprocessing_config=self.character.get("tts_postprocessing"),
-            output_device=self.config["output_device_name"],
-            output_volume_multiplier=float(
-                self.config.get("output_volume_multiplier", 1.0)
-            ),
-        )
-        self.stt = STT(
-            stt_model=self.sttModel,
-            input_device_name=self.config["input_device_name"],
-            required_word=self.config["stt_required_word"],
+        self.sttModel, self.stt = create_stt(self.config, self.plugin_manager)
+        self.ttsModel, self.tts = create_tts(
+            self.config, self.plugin_manager, self.character
         )
 
         log("debug", "Initializing SystemDatabase...")
@@ -1120,49 +1140,6 @@ def read_stdin(chat: Chat):
                 query = data.get("query", "")
                 if query:
                     chat.web_search(query)
-            if data.get("type") == "test_stt":
-                try:
-                    duration_seconds = max(1.0, min(15.0, float(data.get("duration_seconds", 5))))
-                except (TypeError, ValueError):
-                    duration_seconds = 5.0
-                if chat.sttModel is None:
-                    emit_message("test_stt_result", success=False, error="STT is disabled")
-                else:
-                    emit_message("test_stt_started", duration_seconds=duration_seconds)
-
-                    def _run_stt_test(duration_seconds=duration_seconds):
-                        try:
-                            result = chat.stt.test_transcribe(duration_seconds)
-                            emit_message(
-                                "test_stt_result",
-                                success=True,
-                                text=result.text,
-                                latency_ms=result.latency_ms,
-                                audio_duration_ms=result.audio_duration_ms,
-                            )
-                        except Exception as e:
-                            log("error", "STT test failed:", e, traceback.format_exc())
-                            emit_message("test_stt_result", success=False, error=str(e))
-
-                    threading.Thread(target=_run_stt_test, daemon=True).start()
-            if data.get("type") == "test_tts":
-                text = data.get("text")
-                text = text.strip()[:500] if isinstance(text, str) else ""
-                if not text:
-                    emit_message("test_tts_result", success=False, error="No text provided")
-                elif chat.ttsModel is None:
-                    emit_message("test_tts_result", success=False, error="TTS is disabled")
-                else:
-                    def _on_tts_test_metrics(metrics, text=text):
-                        emit_message(
-                            "test_tts_result",
-                            success=True,
-                            text=text,
-                            latency_ms=metrics.get("response_ms"),
-                            time_to_first_byte_ms=metrics.get("time_to_first_byte_ms"),
-                        )
-
-                    chat.tts.say(text, context="test", on_metrics=_on_tts_test_metrics)
 
 
 def check_zombie_status():
@@ -1205,6 +1182,8 @@ if __name__ == "__main__":
         plugin_manager.register_settings()
         quest_catalog_manager = QuestCatalogManager()
         model_usage_store = ModelUsageStore()
+        pre_start_stt: STT | None = None
+        pre_start_tts: TTS | None = None
         startup_phase = "waiting_for_start_signal"
         emit_message("command_ready")
         while True:
@@ -1235,12 +1214,15 @@ if __name__ == "__main__":
                 if data.get("type") == "change_config":
                     config = update_config(config, data["config"])
                     plugin_manager.on_settings_changed(config)
+                    pre_start_stt = None
+                    pre_start_tts = None
                 if data.get("type") == "change_event_config":
                     config = update_event_config(
                         config, data["section"], data["event"], data["value"]
                     )
                 if data.get("type") == "change_character":
                     config = update_character(config, data)
+                    pre_start_tts = None
                 if data.get("type") == "reset_game_events":
                     config = reset_game_events(config, data["character_index"])
                 if data.get("type") == "clear_history":
@@ -1309,6 +1291,57 @@ if __name__ == "__main__":
                     enable_remote_tracing(
                         config["commander_name"], data.get("resourceAttributes", {})
                     )
+                if data.get("type") == "test_stt":
+                    try:
+                        duration_seconds = max(
+                            1.0, min(15.0, float(data.get("duration_seconds", 5)))
+                        )
+                    except (TypeError, ValueError):
+                        duration_seconds = 5.0
+                    if pre_start_stt is None:
+                        _, pre_start_stt = create_stt(config, plugin_manager)
+                    if pre_start_stt.stt_model is None:
+                        emit_message("test_stt_result", success=False, error="STT is disabled")
+                    else:
+                        emit_message("test_stt_started", duration_seconds=duration_seconds)
+
+                        def _run_stt_test(stt=pre_start_stt, duration_seconds=duration_seconds):
+                            try:
+                                result = stt.test_transcribe(duration_seconds)
+                                emit_message(
+                                    "test_stt_result",
+                                    success=True,
+                                    text=result.text,
+                                    latency_ms=result.latency_ms,
+                                    audio_duration_ms=result.audio_duration_ms,
+                                )
+                            except Exception as e:
+                                log("error", "STT test failed:", e, traceback.format_exc())
+                                emit_message("test_stt_result", success=False, error=str(e))
+
+                        threading.Thread(target=_run_stt_test, daemon=True).start()
+                if data.get("type") == "test_tts":
+                    text = data.get("text")
+                    text = text.strip()[:500] if isinstance(text, str) else ""
+                    if not text:
+                        emit_message("test_tts_result", success=False, error="No text provided")
+                    else:
+                        if pre_start_tts is None:
+                            character = config["characters"][config["active_character_index"]]
+                            _, pre_start_tts = create_tts(config, plugin_manager, character)
+                        if pre_start_tts.tts_model is None:
+                            emit_message("test_tts_result", success=False, error="TTS is disabled")
+                        else:
+                            def _on_tts_test_metrics(metrics, text=text):
+                                emit_message(
+                                    "test_tts_result",
+                                    success=True,
+                                    text=text,
+                                    latency_ms=metrics.get("response_ms"),
+                                    time_to_first_byte_ms=metrics.get("time_to_first_byte_ms"),
+                                )
+
+                            pre_start_tts.say(text, context="test", on_metrics=_on_tts_test_metrics)
 
             except json.JSONDecodeError:
                 continue
