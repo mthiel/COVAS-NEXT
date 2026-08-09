@@ -7,7 +7,7 @@ import io
 import queue
 from time import sleep
 import openai
-from src.lib.STT import STT, STTResult
+from src.lib.STT import STT, STTResult, STTTranscriptionResult
 
 def read_no_voice(x):
     """Return silence"""
@@ -132,7 +132,7 @@ def test_get_microphone_fallback(mock_pyaudio, stt):
 
 def test_continuous_listening(stt, mock_pyaudio: dict[str, MagicMock], mock_vad: MagicMock, mock_openai, monkeypatch):
     """Test continuous listening flow"""
-    monkeypatch.setattr('src.lib.STT.STT._transcribe', lambda self, audio: "Test transcription sdf")
+    monkeypatch.setattr('src.lib.STT.STT._transcribe', lambda self, audio, context="speech": STTTranscriptionResult(text="Test transcription sdf", latency_ms=1.0, audio_duration_ms=1000.0))
     mock_pyaudio['stream'].read.side_effect = read_no_voice
     
     stt.listen_continuous()
@@ -164,7 +164,7 @@ def test_continuous_listening(stt, mock_pyaudio: dict[str, MagicMock], mock_vad:
 
 def test_push_to_talk(stt, mock_pyaudio, mock_openai, monkeypatch):
     """Test push-to-talk flow"""
-    monkeypatch.setattr('src.lib.STT.STT._transcribe', lambda self, audio: "Test transcription asd")
+    monkeypatch.setattr('src.lib.STT.STT._transcribe', lambda self, audio, context="speech": STTTranscriptionResult(text="Test transcription asd", latency_ms=1.0, audio_duration_ms=1000.0))
     mock_pyaudio['stream'].read.side_effect = read_voice
     sleep(0.01)  # Simulate button press duration
     
@@ -190,11 +190,31 @@ def test_transcribe(stt, mock_openai, mock_vad):
     
     audio = sr.AudioData(b'\x00\x00' * 16000, 16000, pyaudio.get_sample_size(pyaudio.paInt16))
     res = stt._transcribe(audio)
-    assert res == ''
-    
+    assert res.text == ''
+
     audio = sr.AudioData(b'\xff\xff' * 16000, 16000, pyaudio.get_sample_size(pyaudio.paInt16))
     res = stt._transcribe(audio)
-    assert res == 'Test transcription via API'
+    assert res.text == 'Test transcription via API'
+
+
+def test_test_transcribe_bypasses_result_queue(stt, mock_pyaudio, monkeypatch):
+    """Test that test_transcribe records+transcribes directly without touching resultQueue"""
+    mock_pyaudio['stream'].read.side_effect = read_voice
+    monkeypatch.setattr('src.lib.STT.STT._transcribe', lambda self, audio, context="speech": STTTranscriptionResult(text="Test sample", latency_ms=42.0, audio_duration_ms=1000.0))
+
+    result = stt.test_transcribe(duration_seconds=0.01)
+
+    assert result.text == "Test sample"
+    assert result.latency_ms == 42.0
+    assert stt.resultQueue.empty()
+
+
+def test_test_transcribe_refuses_while_listening(stt):
+    """Test that test_transcribe refuses to run while the mic is already in use"""
+    stt.listening = True
+
+    with pytest.raises(RuntimeError):
+        stt.test_transcribe(duration_seconds=0.01)
 
 
 @pytest.mark.parametrize('manual_paused', [False, True])

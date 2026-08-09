@@ -158,6 +158,7 @@ class TTS:
                 "postprocessing": None,
                 "on_start": None,
                 "on_complete": None,
+                "on_metrics": None,
                 "drop_if": None,
                 "line": None,
             }
@@ -172,6 +173,7 @@ class TTS:
                 "postprocessing_layers": item.get("postprocessing_layers"),
                 "on_start": item.get("on_start"),
                 "on_complete": item.get("on_complete"),
+                "on_metrics": item.get("on_metrics"),
                 "drop_if": item.get("drop_if"),
                 "line": item.get("line"),
             }
@@ -185,6 +187,7 @@ class TTS:
             "postprocessing_layers": None,
             "on_start": None,
             "on_complete": None,
+            "on_metrics": None,
             "drop_if": None,
             "line": None,
         }
@@ -253,6 +256,7 @@ class TTS:
                     postprocessing_layers = item.get("postprocessing_layers")
                     on_start = item.get("on_start")
                     on_complete = item.get("on_complete")
+                    on_metrics = item.get("on_metrics")
                     drop_if = item.get("drop_if")
                     line = item.get("line")
                     if callable(drop_if) and drop_if():
@@ -282,6 +286,7 @@ class TTS:
                                 voice if isinstance(voice, str) else None,
                                 cast(CharacterTTSPostprocessingConfig | None, postprocessing if isinstance(postprocessing, dict) else None),
                                 cast(list[CharacterTTSPostprocessingConfig | None] | None, postprocessing_layers if isinstance(postprocessing_layers, list) else None),
+                                on_metrics if callable(on_metrics) else None,
                             )
                     except Exception as e:
                         self.read_queue.put(item)
@@ -311,6 +316,7 @@ class TTS:
         voice_override: str | None = None,
         postprocessing_override: CharacterTTSPostprocessingConfig | None = None,
         postprocessing_layers: list[CharacterTTSPostprocessingConfig | None] | None = None,
+        on_metrics: Callable[[dict[str, float | None]], None] | None = None,
     ):
         # Fix numberformatting for different providers
         text = re.sub(r"\d+(,\d{3})*(\.\d+)?", self._number_to_text, text)
@@ -368,6 +374,12 @@ class TTS:
             output_audio_duration_ms = (
                 total_audio_bytes / (24_000 * self.sample_size)
             ) * 1000
+
+        if callable(on_metrics):
+            try:
+                on_metrics(stream_metrics)
+            except Exception as callback_error:
+                log('warn', 'TTS on_metrics callback failed', callback_error)
 
         log_tts_usage(
             context,
@@ -1366,6 +1378,7 @@ class TTS:
         postprocessing_layers: list[CharacterTTSPostprocessingConfig | None] | None = None,
         on_start: Callable[[], None] | None = None,
         on_complete: Callable[[], None] | None = None,
+        on_metrics: Callable[[dict[str, float | None]], None] | None = None,
         drop_if: Callable[[], bool] | None = None,
     ) -> TTSLine:
         line = TTSLine()
@@ -1378,6 +1391,7 @@ class TTS:
                 "postprocessing_layers": postprocessing_layers,
                 "on_start": on_start,
                 "on_complete": on_complete,
+                "on_metrics": on_metrics,
                 "drop_if": drop_if,
                 "line": line,
             },

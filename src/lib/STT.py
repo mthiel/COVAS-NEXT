@@ -1,6 +1,7 @@
 import queue
 import threading
 import traceback
+from dataclasses import dataclass
 from time import sleep, time
 from typing import Literal, final
 
@@ -18,6 +19,14 @@ from .Logger import (
     show_chat_message,
 )
 from .Models import STTModel, LLMError
+
+
+@final
+@dataclass
+class STTTranscriptionResult:
+    text: str
+    latency_ms: float | None
+    audio_duration_ms: float
 
 
 @final
@@ -87,10 +96,10 @@ class STT:
 
             audio_raw = b''.join(frames)
             audio_data = sr.AudioData(audio_raw, self.rate, self.sample_width)
-            text = self._transcribe(audio_data)
+            text = self._transcribe(audio_data).text
         finally:
             self.recording = False
-        
+
         if text:
             self.resultQueue.put(STTResult(text, audio_data, timestamp))
         
@@ -153,7 +162,7 @@ class STT:
                         # so we can transcribe the audio
                         #log('debug','no voice detected in the last 0.5 seconds, transcribing')
                         audio_data = sr.AudioData(audio_raw, self.rate, self.sample_width)
-                        text = self._transcribe(audio_data)
+                        text = self._transcribe(audio_data).text
                         frames = []
                         activity = []
                         if text:
@@ -207,55 +216,89 @@ class STT:
         return source
 
     @observe()
-    def _transcribe(self, audio: sr.AudioData) -> str:
+    def _transcribe(self, audio: sr.AudioData, context: str = "speech") -> STTTranscriptionResult:
         log('debug', 'Transcribing audio...')
         if self.stt_model is None:
             raise ValueError('Speech recognition is disabled')
-        
+
         audio_raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
         audio_length = len(audio_raw) / 2 / 16000
         if audio_length < 0.2:
             log('debug', 'skipping short audio')
-            return ''
+            return STTTranscriptionResult(text='', latency_ms=None, audio_duration_ms=audio_length * 1000)
         if all([a < self.vad_threshold for a in self.vad.process_chunks(audio_raw)]):
             log('debug', 'skipping audio without voice')
-            return ''
+            return STTTranscriptionResult(text='', latency_ms=None, audio_duration_ms=audio_length * 1000)
 
 
         text = None
         start_time = time()
-        
+
         try:
             text = self.stt_model.transcribe(audio)
         except LLMError as e:
             log('error', 'STT Error:', e)
             show_chat_message('error', 'STT Error:', str(e))
-            return ''
+            if context != "speech":
+                raise
+            return STTTranscriptionResult(text='', latency_ms=None, audio_duration_ms=audio_length * 1000)
         except Exception as e:
             log('error', 'STT Error:', e, traceback.format_exc())
-            return ''
+            if context != "speech":
+                raise
+            return STTTranscriptionResult(text='', latency_ms=None, audio_duration_ms=audio_length * 1000)
 
         end_time = time()
+        latency_ms = (end_time - start_time) * 1000
         log('debug', f'Response time STT', end_time - start_time)
 
-        filter = ['', 'COVAS, give me a status update... and throw in something inspiring, would you?']
-        if not text or text.strip() in filter:
-            return ''
-        
-        if self.required_word and self.required_word.lower() not in text.lower():
-            return ''
+        if context == "speech":
+            filter = ['', 'COVAS, give me a status update... and throw in something inspiring, would you?']
+            if not text or text.strip() in filter:
+                return STTTranscriptionResult(text='', latency_ms=latency_ms, audio_duration_ms=audio_length * 1000)
+
+            if self.required_word and self.required_word.lower() not in text.lower():
+                return STTTranscriptionResult(text='', latency_ms=latency_ms, audio_duration_ms=audio_length * 1000)
 
         log_stt_usage(
-            "speech",
+            context,
             provider=getattr(self.stt_model, "provider_name", None),
             model_name=getattr(self.stt_model, "model_name", None),
-            latency_usage=LatencyUsageStats(response_ms=(end_time - start_time) * 1000),
+            latency_usage=LatencyUsageStats(response_ms=latency_ms),
             audio_usage=AudioUsageStats(input_audio_duration_ms=audio_length * 1000),
-            text_usage=TextUsageStats(output_chars=len(text)),
+            text_usage=TextUsageStats(output_chars=len(text or '')),
         )
 
         # print("transcription received", text)
-        return text
+        return STTTranscriptionResult(text=text or '', latency_ms=latency_ms, audio_duration_ms=audio_length * 1000)
+
+    def record_sample(self, duration_seconds: float) -> sr.AudioData:
+        source = self._get_microphone()
+        frames = []
+        end_time = time() + duration_seconds
+        try:
+            while time() < end_time:
+                buffer = self._read_stream_buffer(source)
+                if len(buffer) == 0: break  # reached end of the stream
+                frames.append(buffer)
+        finally:
+            source.close()
+        audio_raw = b''.join(frames)
+        return sr.AudioData(audio_raw, self.rate, self.sample_width)
+
+    def test_transcribe(self, duration_seconds: float = 5.0) -> STTTranscriptionResult:
+        """
+        Records a fixed-duration sample from the microphone and transcribes it directly,
+        bypassing the VAD-driven continuous loop and resultQueue so it is never treated
+        as a real user utterance by the assistant.
+        """
+        if self.stt_model is None:
+            raise ValueError('Speech recognition is disabled')
+        if self.listening:
+            raise RuntimeError('Microphone is already in use by push-to-talk or continuous listening')
+
+        audio_data = self.record_sample(duration_seconds)
+        return self._transcribe(audio_data, context="test")
 
     def pause_continuous_listening(self, pause: bool):
         self.continuous_listening_paused = pause
