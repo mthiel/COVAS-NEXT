@@ -227,6 +227,20 @@ mat-panel-title mat-icon {
   margin-top: 1rem;
 }
 
+.voice-test-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.voice-test-row mat-hint,
+.voice-test-row mat-error {
+  display: block;
+  width: 100%;
+}
+
 .sound-devices > .sound-devices-input,
 .sound-devices > .output-device-column {
   flex: 1 1 0;

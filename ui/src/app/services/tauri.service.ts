@@ -266,6 +266,16 @@ export interface GetModelUsageHistoryMessage extends BaseCommand {
     offset?: number;
 }
 
+export interface TestSttCommand extends BaseCommand {
+    type: "test_stt";
+    duration_seconds?: number;
+}
+
+export interface TestTtsCommand extends BaseCommand {
+    type: "test_tts";
+    text: string;
+}
+
 export interface SystemEventsMessage extends BaseMessage {
     type: "system_events";
     system_address: number | string | null;
@@ -280,6 +290,29 @@ export interface QuestsMessage extends BaseMessage {
 export interface ModelUsageHistoryMessage extends BaseMessage {
     type: "model_usage_history";
     data: any;
+}
+
+export interface TestSttStartedMessage extends BaseMessage {
+    type: "test_stt_started";
+    duration_seconds: number;
+}
+
+export interface TestSttResultMessage extends BaseMessage {
+    type: "test_stt_result";
+    success: boolean;
+    text?: string;
+    latency_ms?: number | null;
+    audio_duration_ms?: number | null;
+    error?: string;
+}
+
+export interface TestTtsResultMessage extends BaseMessage {
+    type: "test_tts_result";
+    success: boolean;
+    text?: string;
+    latency_ms?: number | null;
+    time_to_first_byte_ms?: number | null;
+    error?: string;
 }
 
 export interface UnknownMessage extends BaseMessage {

@@ -25,7 +25,10 @@ import { MatIcon } from "@angular/material/icon";
 import {
     OverlayRuntimeInfo,
     TauriService,
+    TestSttResultMessage,
+    TestTtsResultMessage,
 } from "../../services/tauri.service";
+import { VoiceTestService } from "../../services/voice-test.service";
 import {
     MatAccordion,
     MatExpansionModule,
@@ -114,6 +117,16 @@ export class AdvancedSettingsComponent implements OnDestroy {
     apiKeyType: string | null = null;
     assigningPTTIndex: number | null = null;
     isRefreshingAudioDevices = false;
+    sttTestInProgress = false;
+    sttTestCountdown = 0;
+    sttTestResult: TestSttResultMessage | null = null;
+    sttTestError: string | null = null;
+    private sttTestCountdownTimer: number | null = null;
+    private sttTestStartedSubscription: Subscription;
+    ttsTestText = "This is a test of the text to speech system.";
+    ttsTestInProgress = false;
+    ttsTestResult: TestTtsResultMessage | null = null;
+    ttsTestError: string | null = null;
     isStartingRemoteInterface = false;
     remoteInterfaceUrl: string | null = null;
     remoteInterfacePin: string | null = null;
@@ -153,8 +166,14 @@ export class AdvancedSettingsComponent implements OnDestroy {
         private dialog: MatDialog,
         private chatService: ChatService,
         private fontScaleService: FontScaleService,
+        private voiceTestService: VoiceTestService,
     ) {
         this.fontScale = this.fontScaleService.scale;
+        this.sttTestStartedSubscription = this.voiceTestService.sttTestStarted$.subscribe(
+            (message) => {
+                this.startSttCountdown(message.duration_seconds);
+            },
+        );
         this.configSubscription = this.configService.config$.subscribe(
             (config) => {
                 this.config = config;
@@ -214,6 +233,10 @@ export class AdvancedSettingsComponent implements OnDestroy {
         if (this.screensSubscription) {
             this.screensSubscription.unsubscribe();
         }
+        if (this.sttTestStartedSubscription) {
+            this.sttTestStartedSubscription.unsubscribe();
+        }
+        this.stopSttCountdownTimer();
     }
 
     public focusSetting(target: AdvancedSettingsFocusTarget): void {
@@ -408,6 +431,69 @@ export class AdvancedSettingsComponent implements OnDestroy {
             });
         } finally {
             this.isRefreshingAudioDevices = false;
+        }
+    }
+
+    async runSttTest(): Promise<void> {
+        if (this.sttTestInProgress) {
+            return;
+        }
+        this.sttTestInProgress = true;
+        this.sttTestResult = null;
+        this.sttTestError = null;
+        try {
+            const result = await this.voiceTestService.testStt(5);
+            if (result.success) {
+                this.sttTestResult = result;
+            } else {
+                this.sttTestError = result.error ?? "Microphone test failed";
+            }
+        } catch (error) {
+            this.sttTestError = error instanceof Error ? error.message : String(error);
+        } finally {
+            this.sttTestInProgress = false;
+            this.stopSttCountdownTimer();
+            this.sttTestCountdown = 0;
+        }
+    }
+
+    async runTtsTest(): Promise<void> {
+        const text = this.ttsTestText?.trim();
+        if (!text || this.ttsTestInProgress) {
+            return;
+        }
+        this.ttsTestInProgress = true;
+        this.ttsTestResult = null;
+        this.ttsTestError = null;
+        try {
+            const result = await this.voiceTestService.testTts(text);
+            if (result.success) {
+                this.ttsTestResult = result;
+            } else {
+                this.ttsTestError = result.error ?? "Voice test failed";
+            }
+        } catch (error) {
+            this.ttsTestError = error instanceof Error ? error.message : String(error);
+        } finally {
+            this.ttsTestInProgress = false;
+        }
+    }
+
+    private startSttCountdown(durationSeconds: number): void {
+        this.sttTestCountdown = Math.ceil(durationSeconds);
+        this.stopSttCountdownTimer();
+        this.sttTestCountdownTimer = window.setInterval(() => {
+            this.sttTestCountdown = Math.max(0, this.sttTestCountdown - 1);
+            if (this.sttTestCountdown <= 0) {
+                this.stopSttCountdownTimer();
+            }
+        }, 1000);
+    }
+
+    private stopSttCountdownTimer(): void {
+        if (this.sttTestCountdownTimer !== null) {
+            window.clearInterval(this.sttTestCountdownTimer);
+            this.sttTestCountdownTimer = null;
         }
     }
 

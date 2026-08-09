@@ -1104,6 +1104,49 @@ def read_stdin(chat: Chat):
                 query = data.get("query", "")
                 if query:
                     chat.web_search(query)
+            if data.get("type") == "test_stt":
+                try:
+                    duration_seconds = max(1.0, min(15.0, float(data.get("duration_seconds", 5))))
+                except (TypeError, ValueError):
+                    duration_seconds = 5.0
+                if chat.sttModel is None:
+                    emit_message("test_stt_result", success=False, error="STT is disabled")
+                else:
+                    emit_message("test_stt_started", duration_seconds=duration_seconds)
+
+                    def _run_stt_test(duration_seconds=duration_seconds):
+                        try:
+                            result = chat.stt.test_transcribe(duration_seconds)
+                            emit_message(
+                                "test_stt_result",
+                                success=True,
+                                text=result.text,
+                                latency_ms=result.latency_ms,
+                                audio_duration_ms=result.audio_duration_ms,
+                            )
+                        except Exception as e:
+                            log("error", "STT test failed:", e, traceback.format_exc())
+                            emit_message("test_stt_result", success=False, error=str(e))
+
+                    threading.Thread(target=_run_stt_test, daemon=True).start()
+            if data.get("type") == "test_tts":
+                text = data.get("text")
+                text = text.strip()[:500] if isinstance(text, str) else ""
+                if not text:
+                    emit_message("test_tts_result", success=False, error="No text provided")
+                elif chat.ttsModel is None:
+                    emit_message("test_tts_result", success=False, error="TTS is disabled")
+                else:
+                    def _on_tts_test_metrics(metrics, text=text):
+                        emit_message(
+                            "test_tts_result",
+                            success=True,
+                            text=text,
+                            latency_ms=metrics.get("response_ms"),
+                            time_to_first_byte_ms=metrics.get("time_to_first_byte_ms"),
+                        )
+
+                    chat.tts.say(text, context="test", on_metrics=_on_tts_test_metrics)
 
 
 def check_zombie_status():
