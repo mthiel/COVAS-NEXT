@@ -14,6 +14,7 @@ import json
 
 from .Projections import get_state_dict, ProjectedStates
 from .Database import QuestDatabase
+from .Config import DEFAULT_SYSTEM_PROMPT
 
 from .EventModels import (
     ApproachBodyEvent, ApproachSettlementEvent, BookTaxiEvent, BountyEvent, BuyExplorationDataEvent, CommanderEvent, CommitCrimeEvent,
@@ -67,11 +68,12 @@ class PromptGenerator:
         lower = min(80, math.floor(health * 5) * 20)
         return f"between {lower}% and {lower + 20}% (journal updates in 20% steps; exact current value unavailable)"
     
-    def __init__(self, commander_name: str, character_prompt: str, important_game_events: list[str], system_db: SystemDatabase, weapon_types: list[dict] | None = None, disabled_game_events: list[str] | None = None):
+    def __init__(self, commander_name: str, character_prompt: str, important_game_events: list[str], system_db: SystemDatabase, weapon_types: list[dict] | None = None, disabled_game_events: list[str] | None = None, system_prompt: str = DEFAULT_SYSTEM_PROMPT):
         self.registered_prompt_event_handlers: list[Callable[[Event], str|None]] = []
         self.registered_status_generators: list[Callable[[ProjectedStates], list[tuple[str, Any]]]] = []
         self.commander_name = commander_name
         self.character_prompt = character_prompt
+        self.system_prompt = system_prompt
         self.important_game_events = important_game_events
         self.disabled_game_events = disabled_game_events if disabled_game_events is not None else []
         self.system_db = system_db
@@ -3796,14 +3798,7 @@ class PromptGenerator:
                 })
 
         try:
-            system_prompt_content = "The universe of Elite:Dangerous is your reality. Never mention it or refer to it as a game. " \
-                    + "I will provide game events in parentheses; do not create new ones. Only react to game events marked with 'IMPORTANT:'.  " \
-                    + "Stay consistent with the lived experience and character. Do not hallucinate any information that is not given to you. " \
-                    + "Do not use markdown in your responses, and no commas in numbers. " \
-                    + "Your purpose is to provide information, status updates, and execute tools as required. Only use tools you are given from me. " \
-                    + "Be specific about amounts and percentages for inquiries as the commander can not see the game events' text description but lives in the universe. " \
-                    + "You do not ask questions or initiate conversations. You respond only when addressed and in a single sentence. " \
-                    + "Don't repeat the same words and sentences, mix it up. " \
+            system_prompt_content = self.system_prompt \
                     + "Your character prompt is: " + self.character_prompt.format(commander_name=self.commander_name)
             
             usage_stats.system_chars = len(system_prompt_content)
