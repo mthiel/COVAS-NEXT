@@ -68,12 +68,13 @@ class PromptGenerator:
         lower = min(80, math.floor(health * 5) * 20)
         return f"between {lower}% and {lower + 20}% (journal updates in 20% steps; exact current value unavailable)"
     
-    def __init__(self, commander_name: str, character_prompt: str, important_game_events: list[str], system_db: SystemDatabase, weapon_types: list[dict] | None = None, disabled_game_events: list[str] | None = None, system_prompt: str = DEFAULT_SYSTEM_PROMPT):
+    def __init__(self, commander_name: str, character_prompt: str, important_game_events: list[str], system_db: SystemDatabase, weapon_types: list[dict] | None = None, disabled_game_events: list[str] | None = None, system_prompt: str = DEFAULT_SYSTEM_PROMPT, system_prompt_bypass: bool = False):
         self.registered_prompt_event_handlers: list[Callable[[Event], str|None]] = []
         self.registered_status_generators: list[Callable[[ProjectedStates], list[tuple[str, Any]]]] = []
         self.commander_name = commander_name
         self.character_prompt = character_prompt
         self.system_prompt = system_prompt
+        self.system_prompt_bypass = system_prompt_bypass
         self.important_game_events = important_game_events
         self.disabled_game_events = disabled_game_events if disabled_game_events is not None else []
         self.system_db = system_db
@@ -3798,8 +3799,12 @@ class PromptGenerator:
                 })
 
         try:
-            system_prompt_content = self.system_prompt \
-                    + "Your character prompt is: " + self.character_prompt.format(commander_name=self.commander_name)
+            character_prompt = self.character_prompt.format(commander_name=self.commander_name)
+            if self.system_prompt_bypass:
+                system_prompt_content = character_prompt
+            else:
+                system_prompt_content = self.system_prompt \
+                    + "Your character prompt is: " + character_prompt
             
             usage_stats.system_chars = len(system_prompt_content)
             conversational_pieces.append(
