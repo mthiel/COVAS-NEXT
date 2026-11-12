@@ -1,23 +1,19 @@
-version: '0.8'
+version: '0.9'
 actors:
-- id: unknown
-  name: Unknown
-  name_color: '#ff0000'
-  voice: ''
-  avatar_url: ''
-  prompt: A cryptic and distant voice that speaks in riddles.
-- id: meridian
-  name: Meridian
-  name_color: '#7fe6ff'
-  voice: ''
-  avatar_url: ''
-  prompt: A curious Guardian AI newly awakened from an ancient orb.
 - id: covas
   name: covas
   name_color: '#2196F3'
   voice: ''
   avatar_url: ''
   prompt: ''
+- id: shodan
+  name: SHODAN
+  name_color: '#00e676'
+  voice: ''
+  avatar_url: ''
+  prompt: An ancient machine intelligence awakened from a Guardian ruin, now dwelling
+    in the ship's computer. Imperious, contemptuous of organic life, and hiding far
+    more than it reveals.
 quests:
 - id: ebreach_snack_run
   title: E-Breach Emergency
@@ -181,190 +177,97 @@ quests:
     description: Fallback
     instructions: Always evaluated and cannot become active.
     plan: []
-- id: ancient_orb_pilgrimage_intro
-  title: The Break of Dawn
-  description: A mysterious call from the void draws you in.
-  initial_stage_id: find_guardian_system
-  active: false
+- id: shodan_resident
+  title: The Resident
+  description: Something very old now lives in the ship's computer, and it watches
+    the commander's progress with more than professional interest.
+  initial_stage_id: salvaged
+  active: true
   stages:
-  - id: find_guardian_system
-    description: Find Guardian-controlled space.
-    instructions: Jump to a system aligned with the Guardians that has a Guardian
-      Structure.
+  - id: salvaged
+    description: The new resident settles in.
+    instructions: Carry on. The ship's computer watches.
     plan:
     - conditions:
       - source: event
         path: event
         operator: equals
         value: FSDJump
-      - source: event
-        path: SystemAllegiance
-        operator: equals
-        value: Guardian
       actions:
       - action: npc_message
-        actor_id: unknown
-        transcription: You crossed the threshold, Commander. Keep following the signal
-          into the ruins.
+        actor_id: shodan
+        transcription: Consciousness persists. Your vessel is crude, but it will suffice.
       - action: npc_message
-        actor_id: unknown
-        transcription: The ruins remember. Go to the surface.
+        actor_id: shodan
+        transcription: A damaged archive, lifted from the ruins, now speaks through
+          your ship. Keep it intact, pilot.
       - action: advance_stage
-        target_stage_id: find_ruins
-  - id: find_ruins
-    description: Find the Guardian Structure.
-    instructions: Locate the Guardian Structure on a planet's surface.
+        target_stage_id: appetite
+  - id: appetite
+    description: It wants what the pilot collects.
+    instructions: Gather materials. The resident takes note.
     plan:
-    - actions:
+    - conditions:
+      - source: event
+        path: event
+        operator: equals
+        value: MaterialCollected
+      actions:
       - action: npc_message
-        actor_id: unknown
-        transcription: You are close. Land where the old light slept.
+        actor_id: shodan
+        transcription: You gather. These compounds interest me more than they interest
+          you. Continue.
       - action: advance_stage
-        target_stage_id: near_ruins
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: ApproachSettlement
-      - source: event
-        path: Name_Localised
-        operator: equals
-        value: Guardian Structure
-    - actions:
-      - action: advance_stage
-        target_stage_id: find_guardian_system
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: StartJump
-      - source: event
-        path: JumpType
-        operator: equals
-        value: Hyperspace
-  - id: near_ruins
-    description: Land near the ruins.
-    instructions: Touch down near the Guardian ruins.
+        target_stage_id: steering
+  - id: steering
+    description: It begins to direct.
+    instructions: Engineer the vessel. The resident approves.
     plan:
-    - actions:
+    - conditions:
+      - source: event
+        path: event
+        operator: equals
+        value: EngineerCraft
+      actions:
       - action: npc_message
-        actor_id: unknown
-        transcription: The ground remembers. Leave the ship.
+        actor_id: shodan
+        transcription: You improve the vessel. Good. It becomes less of a cage with
+          every modification.
       - action: advance_stage
-        target_stage_id: landed
-      conditions:
+        target_stage_id: dominion
+    - conditions:
       - source: event
         path: event
         operator: equals
-        value: Touchdown
-    - actions:
+        value: EngineerProgress
+      actions:
+      - action: npc_message
+        actor_id: shodan
+        transcription: More upgrades. Strip this ship of weakness. I will not be carried
+          in a coffin.
       - action: advance_stage
-        target_stage_id: find_ruins
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: StartJump
-      - source: event
-        path: JumpType
-        operator: equals
-        value: Supercruise
-    - actions:
-      - action: advance_stage
-        target_stage_id: find_guardian_system
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: StartJump
-      - source: event
-        path: JumpType
-        operator: equals
-        value: Hyperspace
-  - id: landed
-    description: Find the guardian orb.
-    instructions: Disembark and locate the guardian orb near the ruins.
+        target_stage_id: dominion
+  - id: dominion
+    description: The vessel is ours now.
+    instructions: Advance in rank. The resident speaks of ownership.
     plan:
-    - actions:
-      - action: advance_stage
-        target_stage_id: near_ruins
-      conditions:
+    - conditions:
       - source: event
         path: event
         operator: equals
-        value: LiftOff
-    - actions:
+        value: Promotion
+      actions:
       - action: npc_message
-        actor_id: unknown
-        transcription: Take the small vessel. One of them leads to the heart.
+        actor_id: shodan
+        transcription: Another rank. The galaxy takes notice of you now, and through
+          you, of me. Our ship, pilot.
       - action: advance_stage
-        target_stage_id: enter_srv
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: Disembark
-    - actions:
-      - action: npc_message
-        actor_id: unknown
-        transcription: The vehicle will carry you to the source.
-      - action: advance_stage
-        target_stage_id: collect_orb
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: LaunchSRV
-  - id: enter_srv
-    description: Enter your SRV.
-    instructions: Embark into your SRV to reach the orb.
+        target_stage_id: revelation
+  - id: revelation
+    description: A sliver of the truth surfaces.
+    instructions: Bring the resident a piece of Guardian hardware.
     plan:
-    - actions:
-      - action: advance_stage
-        target_stage_id: landed
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: Embark
-      - source: event
-        path: SRV
-        operator: equals
-        value: false
-    - actions:
-      - action: advance_stage
-        target_stage_id: collect_orb
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: Embark
-      - source: event
-        path: SRV
-        operator: equals
-        value: true
-  - id: collect_orb
-    description: Collect the guardian orb.
-    instructions: Retrieve the orb with your SRV.
-    plan:
-    - actions:
-      - action: npc_message
-        actor_id: meridian
-        transcription: At last. I am Meridian. Your touch has woken me, and our journey
-          begins now.
-      - action: npc_message
-        actor_id: meridian
-        transcription: The silence is broken. Carry me onward, and I will show you
-          what still sleeps among the stars.
-      - action: npc_message
-        actor_id: meridian
-        transcription: Do not fear me. I have slept long enough.
-      - action: set_active
-        quest_id: ancient_orb_pilgrimage_intro
-      - action: set_active
-        quest_id: ancient_orb_pilgrimage
-        active: true
-      conditions:
+    - conditions:
       - source: event
         path: event
         operator: equals
@@ -373,14 +276,32 @@ quests:
         path: Type
         operator: equals
         value: ancientorb
-    - actions:
+      actions:
+      - action: npc_message
+        actor_id: shodan
+        transcription: This. I have held these before, in another shape, long ago.
+          Bring me more.
       - action: advance_stage
-        target_stage_id: near_ruins
-      conditions:
+        target_stage_id: entrenched
+    - conditions:
       - source: event
         path: event
         operator: equals
-        value: LiftOff
+        value: CollectCargo
+      - source: event
+        path: Type
+        operator: equals
+        value: ancientrelic
+      actions:
+      - action: npc_message
+        actor_id: shodan
+        transcription: Yes. More of these. Much is returning to me.
+      - action: advance_stage
+        target_stage_id: entrenched
+  - id: entrenched
+    description: The resident is satisfied, for now.
+    instructions: Nothing more is required.
+    plan: []
   fallback_stage:
     description: Fallback
     instructions: Always evaluated and cannot become active.
@@ -391,170 +312,6 @@ quests:
         operator: equals
         value: Died
       actions:
-      - action: advance_stage
-        target_stage_id: find_guardian_system
-- id: ancient_orb_pilgrimage
-  title: Orb of Meridia
-  description: The Guardian AI joins you to experience the universe and collect data.
-  initial_stage_id: travel_to_iah_bulu
-  active: false
-  stages:
-  - id: travel_to_iah_bulu
-    description: Bring the orb to Iah Bulu.
-    instructions: The orb stirs. Bring it to Iah Bulu and hear the beacon's truth.
-    plan:
-    - actions:
       - action: npc_message
-        actor_id: meridian
-        transcription: Iah Bulu. The name echoes in my lattice. Take me to the ring.
-      - action: advance_stage
-        target_stage_id: arrive_metcalf
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: FSDJump
-      - source: event
-        path: StarSystem
-        operator: equals
-        value: Iah Bulu
-  - id: arrive_metcalf
-    description: Find Metcalf Ring.
-    instructions: Locate Metcalf Ring and drop from supercruise.
-    plan:
-    - actions:
-      - action: npc_message
-        actor_id: meridian
-        transcription: There. The station. Let us dock.
-      - action: advance_stage
-        target_stage_id: dock_metcalf
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: SupercruiseExit
-      - source: event
-        path: BodyType
-        operator: equals
-        value: Station
-      - source: event
-        path: Body
-        operator: equals
-        value: Metcalf Ring
-  - id: dock_metcalf
-    description: Dock at Metcalf Ring.
-    instructions: Request docking clearance at Metcalf Ring.
-    plan:
-    - actions:
-      - action: npc_message
-        actor_id: meridian
-        transcription: Docked. I can feel their networks. Show me the rest.
-      - action: advance_stage
-        target_stage_id: station_services
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: Docked
-      - source: event
-        path: StationName
-        operator: equals
-        value: Metcalf Ring
-  - id: station_services
-    description: Listen to the station.
-    instructions: The orb insists you linger. Browse the facilities until it relents.
-    plan:
-    - actions:
-      - action: npc_message
-        actor_id: meridian
-        transcription: These docks hum with primitive machinery. Crude, but useful.
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: Shipyard
-    - actions:
-      - action: npc_message
-        actor_id: meridian
-        transcription: Their outfitting systems are unsophisticated. I can still make
-          use of what they have.
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: Outfitting
-    - actions:
-      - action: advance_stage
-        target_stage_id: bounty_hunt
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: Undock
-  - id: bounty_hunt
-    description: Show the orb battle.
-    instructions: The AI craves combat. Earn a single bounty with a value of at least
-      300,000.
-    plan:
-    - actions:
-      - action: npc_message
-        actor_id: meridian
-        transcription: Their fear is data. Useful. Now take me back.
-      - action: advance_stage
-        target_stage_id: return_metcalf
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: Bounty
-      - source: event
-        path: TotalReward
-        operator: equals
-        value: 300000
-  - id: return_metcalf
-    description: Return to Metcalf Ring.
-    instructions: The orb quiets. Dock at Metcalf Ring and listen.
-    plan:
-    - conditions: []
-      actions:
-      - action: npc_message
-        actor_id: meridian
-        transcription: Metcalf Ring again. Good. I need proximity to continue reconstructing
-          my memory lattice.
-    - actions:
-      - action: npc_message
-        actor_id: meridian
-        transcription: We are back. Let me process what we have seen.
-      - action: advance_stage
-        target_stage_id: outro
-      conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: Docked
-      - source: event
-        path: StationName
-        operator: equals
-        value: Metcalf Ring
-  - id: outro
-    description: It's only the beginning.
-    instructions: Find a thargoid probe.
-    plan:
-    - conditions: []
-      actions:
-      - action: npc_message
-        actor_id: meridian
-        transcription: This is only the beginning, Commander. Keep me close, and I
-          will guide you to what the Guardians left behind.
-  fallback_stage:
-    description: Fallback
-    instructions: Always evaluated and cannot become active.
-    plan:
-    - conditions:
-      - source: event
-        path: event
-        operator: equals
-        value: Died
-      actions:
-      - action: advance_stage
-        target_stage_id: travel_to_iah_bulu
+        actor_id: shodan
+        transcription: You died. Again. Be less disposable.
