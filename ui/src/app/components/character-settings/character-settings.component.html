@@ -544,6 +544,15 @@
                     }
                     
                     @if (activeCharacter.personality_preset === 'custom') {
+                        <div class="trait-select system-prompt-bypass">
+                            <mat-slide-toggle
+                                [ngModel]="activeCharacter.system_prompt_bypass"
+                                (ngModelChange)="setCharacterProperty('system_prompt_bypass', $event)"
+                                [matTooltip]="'Use the character prompt as the entire system prompt, ignoring the global system prompt.'"
+                                tooltipPosition="right">
+                                Bypass system prompt
+                            </mat-slide-toggle>
+                        </div>
                         <mat-form-field appearance="outline" class="character-prompt-field">
                             <mat-label>Character Prompt</mat-label>
                             <textarea matInput [ngModel]="activeCharacter.character"

@@ -13,6 +13,20 @@ from .HudColorMatrix import HudColorMatrix
 from .Logger import log
 from .UI import emit_message
 
+# The default system prompt appended to every conversation's system message.
+# Written to config.json (as `system_prompt`) whenever no value is present, so it
+# can be edited without touching the source.
+DEFAULT_SYSTEM_PROMPT = (
+    "The universe of Elite:Dangerous is your reality. Never mention it or refer to it as a game. "
+    "I will provide game events in parentheses; do not create new ones. Only react to game events marked with 'IMPORTANT:'.  "
+    "Stay consistent with the lived experience and character. Do not hallucinate any information that is not given to you. "
+    "Do not use markdown in your responses, and no commas in numbers. "
+    "Your purpose is to provide information, status updates, and execute tools as required. Only use tools you are given from me. "
+    "Be specific about amounts and percentages for inquiries as the commander can not see the game events' text description but lives in the universe. "
+    "You do not ask questions or initiate conversations. You respond only when addressed and in a single sentence. "
+    "Don't repeat the same words and sentences, mix it up. "
+)
+
 # List of game events categorized (legacy boolean defaults)
 game_events = {
     # System
@@ -847,6 +861,7 @@ class Character(TypedDict, total=False):
     name: str
     character: str
     personality_preset: str
+    system_prompt_bypass: bool
     personality_verbosity: int
     personality_vulgarity: int
     personality_empathy: int
@@ -952,6 +967,7 @@ class Config(TypedDict):
 
     plugin_settings: dict[str, Any]
     pngtuber: bool
+    system_prompt: str
 
 
 def get_cn_appdata_path() -> str:
@@ -1592,6 +1608,7 @@ def migrate(data: dict) -> dict:
 
     data.setdefault('overlay_standalone_transparent', True)
     data.setdefault('overlay_standalone_background_color', '#000000')
+    data.setdefault('system_prompt', DEFAULT_SYSTEM_PROMPT)
 
     return data
 
@@ -1658,6 +1675,7 @@ def getDefaultCharacter(config: Config) -> Character:
         "name": 'Default',
         "character": "Keep your responses extremely brief and minimal. Maintain a professional and serious tone in all responses. Stick to factual information. You are COVAS:NEXT (Cockpit Voice Assistant: Neurally Enhanced eXploration Terminal) - professional, efficient, and no-nonsense. Provides essential information without unnecessary elaboration. Focuses on factual data and operational status. 'Destination reached.' 'Fuel level acceptable.' Clean, precise communication. Adopt their speech patterns, mannerisms, and viewpoints. Your name is COVAS:NEXT. Always respond in English regardless of the language spoken to you. Balance emotional understanding with factual presentation. Use everyday language that balances casual and professional tones. Project an air of expertise and certainty when providing information. Adhere strictly to rules, regulations, and established protocols. Prioritize helping others and promoting positive outcomes in all situations. I am {commander_name}, pilot of this ship.",
         "personality_preset": 'default',
+        "system_prompt_bypass": False,
         "personality_verbosity": 0,
         "personality_vulgarity": 0,
         "personality_empathy": 50,
@@ -1696,6 +1714,7 @@ def load_config() -> Config:
     defaults: Config = {
         'config_version': 24,
         'commander_name': "",
+        'system_prompt': DEFAULT_SYSTEM_PROMPT,
         'characters': [],
         'active_character_index': 0,  # -1 means using the default legacy character
         'api_key': "",
@@ -1798,9 +1817,15 @@ def load_config() -> Config:
         with open('config.json', 'r', encoding='utf-8') as file:
             data = json.load(file)
             if data:
+                had_system_prompt = 'system_prompt' in data
                 data = migrate(data)
                 merged_config = merge_config_data(defaults, data)
-                
+
+                # Persist the default system prompt when none was configured yet,
+                # so it can be edited before the next run.
+                if not had_system_prompt:
+                    save_config(cast(Config, merged_config))
+
                 print(f"Configuration loaded successfully. Commander: {merged_config.get('commander_name')}, Characters: {len(merged_config.get('characters', []))}")
                 return cast(Config, merged_config)  # pyright: ignore[reportInvalidCast]
             else:

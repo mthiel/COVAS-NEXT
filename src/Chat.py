@@ -333,6 +333,8 @@ class Chat:
             system_db=self.system_database,
             weapon_types=cast(list[dict], self.config.get("weapon_types", [])),
             disabled_game_events=disabled_events,
+            system_prompt=self.config["system_prompt"],
+            system_prompt_bypass=self.character.get("system_prompt_bypass", False),
         )
 
         log("debug", "Initializing event manager...")

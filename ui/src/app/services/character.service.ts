@@ -74,6 +74,7 @@ export interface Character {
     name: string;
     character: string;
     personality_preset: string;
+    system_prompt_bypass?: boolean;
     personality_verbosity: number;
     personality_vulgarity: number;
     personality_empathy: number;
