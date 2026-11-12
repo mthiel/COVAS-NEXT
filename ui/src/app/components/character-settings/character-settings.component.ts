@@ -2,8 +2,10 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, QueryList, ViewChild, 
 import { CommonModule } from "@angular/common";
 import { DomSanitizer, SafeHtml } from "@angular/platform-browser";
 import {
+    MatError,
     MatFormField,
     MatFormFieldModule,
+    MatHint,
     MatLabel,
 } from "@angular/material/form-field";
 import { MatIcon } from "@angular/material/icon";
@@ -42,6 +44,8 @@ import {MatSlideToggle} from "@angular/material/slide-toggle";
 import { MatExpansionModule } from "@angular/material/expansion";
 import { ChatService } from "../../services/chat.service";
 import { SettingsGridComponent } from "../settings-grid/settings-grid.component";
+import { VoiceTestService } from "../../services/voice-test.service";
+import { TestTtsResultMessage } from "../../services/tauri.service";
 
 import { ModelProviderDefinition, providerVoiceDisplayValue, SettingsGrid, voiceSettingsContext } from "../../services/plugin-settings";
 
@@ -100,6 +104,8 @@ interface LowHighPassPresetOption {
         MatCheckboxModule,
         MatFormField,
         MatLabel,
+        MatError,
+        MatHint,
         MatIcon,
         MatSelect,
         MatOption,
@@ -127,6 +133,10 @@ export class CharacterSettingsComponent implements OnDestroy, AfterViewInit {
     selectedCharacterIndex: number | null = null;
     editMode = false;
     showVoiceSettings = false;
+    ttsTestText = "This is a test of the text to speech system.";
+    ttsTestInProgress = false;
+    ttsTestResult: TestTtsResultMessage | null = null;
+    ttsTestError: string | null = null;
     initializing: boolean = true;
     /** Primary MIME from CharacterService (blob avatars); null when no file or unknown. */
     private avatarMimePrimary: string | null = null;
@@ -214,6 +224,7 @@ export class CharacterSettingsComponent implements OnDestroy, AfterViewInit {
         private dialog: MatDialog,
         private sanitizer: DomSanitizer,
         private chatService: ChatService,
+        private voiceTestService: VoiceTestService,
     ) {
         this.configSubscription = this.configService.config$.subscribe(
             (config) => {
@@ -326,6 +337,28 @@ export class CharacterSettingsComponent implements OnDestroy, AfterViewInit {
 
     createVoiceSetValueFn(): (fieldKey: string, value: any) => void {
         return (fieldKey, value) => void this.setVoiceSettingValue(fieldKey, value);
+    }
+
+    async runTtsTest(): Promise<void> {
+        const text = this.ttsTestText?.trim();
+        if (!text || this.ttsTestInProgress) {
+            return;
+        }
+        this.ttsTestInProgress = true;
+        this.ttsTestResult = null;
+        this.ttsTestError = null;
+        try {
+            const result = await this.voiceTestService.testTts(text);
+            if (result.success) {
+                this.ttsTestResult = result;
+            } else {
+                this.ttsTestError = result.error ?? "Voice test failed";
+            }
+        } catch (error) {
+            this.ttsTestError = error instanceof Error ? error.message : String(error);
+        } finally {
+            this.ttsTestInProgress = false;
+        }
     }
 
     public focusActiveCharacterOverview(): void {

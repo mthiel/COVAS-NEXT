@@ -361,6 +361,32 @@
                             </div>
                         </div>
                                 </div>
+                            <div class="voice-test-row">
+                                <mat-form-field appearance="outline">
+                                    <mat-label>Test Voice Text</mat-label>
+                                    <input matInput [(ngModel)]="ttsTestText">
+                                </mat-form-field>
+                                <button
+                                    mat-stroked-button
+                                    type="button"
+                                    [disabled]="ttsTestInProgress || !ttsTestText.trim()"
+                                    (click)="runTtsTest()">
+                                    @if (ttsTestInProgress) {
+                                        Playing...
+                                    } @else {
+                                        Test Voice
+                                    }
+                                </button>
+                                @if (ttsTestResult) {
+                                    <mat-hint>
+                                        Latency: {{ ttsTestResult.latency_ms | number: '1.0-0' }} ms
+                                        (first byte {{ ttsTestResult.time_to_first_byte_ms | number: '1.0-0' }} ms)
+                                    </mat-hint>
+                                }
+                                @if (ttsTestError) {
+                                    <mat-error>{{ ttsTestError }}</mat-error>
+                                }
+                            </div>
                             </div>
                     </mat-expansion-panel>
                 </div>
