@@ -68,7 +68,7 @@ class PromptGenerator:
         lower = min(80, math.floor(health * 5) * 20)
         return f"between {lower}% and {lower + 20}% (journal updates in 20% steps; exact current value unavailable)"
     
-    def __init__(self, commander_name: str, character_prompt: str, important_game_events: list[str], system_db: SystemDatabase, weapon_types: list[dict] | None = None, disabled_game_events: list[str] | None = None, system_prompt: str = DEFAULT_SYSTEM_PROMPT, system_prompt_bypass: bool = False):
+    def __init__(self, commander_name: str, character_prompt: str, important_game_events: list[str], system_db: SystemDatabase, weapon_types: list[dict] | None = None, disabled_game_events: list[str] | None = None, background_game_events: list[str] | None = None, system_prompt: str = DEFAULT_SYSTEM_PROMPT, system_prompt_bypass: bool = False):
         self.registered_prompt_event_handlers: list[Callable[[Event], str|None]] = []
         self.registered_status_generators: list[Callable[[ProjectedStates], list[tuple[str, Any]]]] = []
         self.commander_name = commander_name
@@ -77,6 +77,7 @@ class PromptGenerator:
         self.system_prompt_bypass = system_prompt_bypass
         self.important_game_events = important_game_events
         self.disabled_game_events = disabled_game_events if disabled_game_events is not None else []
+        self.background_game_events = background_game_events if background_game_events is not None else []
         self.system_db = system_db
         self.weapon_types: list[dict] = weapon_types if weapon_types is not None else []
         self.quest_db = QuestDatabase()
@@ -2506,24 +2507,26 @@ class PromptGenerator:
 
         return None
 
-    def event_message(self, event: Union[GameEvent, ProjectedEvent, ExternalEvent, QuestEvent], timeoffset: str, is_important: bool, projected_states: ProjectedStates | None = None):
+    def event_message(self, event: Union[GameEvent, ProjectedEvent, ExternalEvent, QuestEvent], timeoffset: str, is_important: bool, projected_states: ProjectedStates | None = None, is_background: bool = False):
         message = self.get_event_template(event, projected_states)
         if message:
+            tag = "IMPORTANT " if is_important else ("Background " if is_background else "")
             return {
                 "role": "user",
-                "content": f"[{'IMPORTANT ' if is_important else ''}Game Event, {timeoffset}] {message}",
+                "content": f"[{tag}Game Event, {timeoffset}] {message}",
             }
 
         # Deliberately ignored events
         # log('info', f'ignored event', event)
         return None
 
-    def status_messages(self, event: StatusEvent, timeoffset: str, is_important: bool):
+    def status_messages(self, event: StatusEvent, timeoffset: str, is_important: bool, is_background: bool = False):
         message = self.get_status_event_template(event)
         if message:
+            tag = "IMPORTANT " if is_important else ("Background " if is_background else "")
             return {
                 "role": "user",
-                "content": f"[{'IMPORTANT ' if is_important else ''}Game Event, {timeoffset}] {message}",
+                "content": f"[{tag}Game Event, {timeoffset}] {message}",
             }
 
         # Deliberately ignored events
@@ -3712,7 +3715,8 @@ class PromptGenerator:
 
                 if len(conversational_pieces) < 20:
                     is_important = is_pending and event_type in self.important_game_events
-                    message = self.event_message(event, time_offset, is_important, projected_states)
+                    is_background = event_type in self.background_game_events
+                    message = self.event_message(event, time_offset, is_important, projected_states, is_background=is_background)
                     if message:
                         piece = message
                         conversational_pieces.append(piece)
@@ -3728,7 +3732,8 @@ class PromptGenerator:
                     and event_type != "Status"
                 ):
                     is_important = is_pending and event_type in self.important_game_events
-                    message = self.status_messages(event, time_offset, is_important)
+                    is_background = event_type in self.background_game_events
+                    message = self.status_messages(event, time_offset, is_important, is_background=is_background)
                     if message:
                         piece = message
                         conversational_pieces.append(piece)

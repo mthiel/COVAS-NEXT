@@ -224,13 +224,16 @@ class Chat:
 
         self.enabled_game_events: list[str] = []
         disabled_events: list[str] = []
+        background_events: list[str] = []
         event_reactions = self.character.get("event_reactions", {})
         if self.character.get("event_reaction_enabled_var", False):
             for event, state in event_reactions.items():
                 if state == "on":
                     self.enabled_game_events.append(event)
-                if state == "hidden":
+                elif state == "hidden":
                     disabled_events.append(event)
+                elif state == "off":
+                    background_events.append(event)
 
         log("debug", "Initializing Controller Manager...")
         self.controller_manager = ControllerManager()
@@ -353,6 +356,7 @@ class Chat:
             system_db=self.system_database,
             weapon_types=cast(list[dict], self.config.get("weapon_types", [])),
             disabled_game_events=disabled_events,
+            background_game_events=background_events,
             system_prompt=self.config["system_prompt"],
             system_prompt_bypass=self.character.get("system_prompt_bypass", False),
         )
